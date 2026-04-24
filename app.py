@@ -121,8 +121,7 @@ if st.session_state.slides:
             else:
                 st.write(f"タイトル: {slide.title}")
                 for i, p in enumerate(slide.paragraphs, 1):
-                    hl = f"　*強調: {p.highlight}（{p.highlight_color}）*" if p.highlight else ""
-                    st.write(f"本文{i}: {p.text}{hl}")
+                    st.write(f"本文{i}: {p.text}")
 
 else:
     st.info("👈 左のサイドバーにテーマを入力して「生成する」を押してください。")
