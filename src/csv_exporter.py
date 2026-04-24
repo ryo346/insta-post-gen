@@ -4,14 +4,8 @@ import io
 from pathlib import Path
 from .models import Carousel, Slide
 
-_MAX_BODY = 4   # max paragraphs per slide
-
-
 def _headers() -> list[str]:
-    cols = ["slide_number", "slide_type", "header", "illustration"]
-    for i in range(1, _MAX_BODY + 1):
-        cols.append(f"body{i}")
-    return cols
+    return ["slide_number", "slide_type", "header", "illustration", "body"]
 
 
 def _row(slide: Slide) -> dict[str, str]:
@@ -26,8 +20,7 @@ def _row(slide: Slide) -> dict[str, str]:
     else:
         d["header"]       = slide.title.replace("\n", " ")
         d["illustration"] = slide.illustration_hint or ""
-        for i, para in enumerate(slide.paragraphs[:_MAX_BODY], 1):
-            d[f"body{i}"] = para.text
+        d["body"]         = "\n\n".join(p.text for p in slide.paragraphs)
 
     return d
 
