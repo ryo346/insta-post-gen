@@ -34,8 +34,6 @@ if "illustrations" not in st.session_state:
     st.session_state.illustrations = {}
 if "theme_done" not in st.session_state:
     st.session_state.theme_done = ""
-if "csv_data" not in st.session_state:
-    st.session_state.csv_data = None
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -95,14 +93,18 @@ with st.sidebar:
             use_container_width=True,
         )
 
-        if st.session_state.csv_data:
-            st.download_button(
-                "📊 Canva用CSVをダウンロード",
-                st.session_state.csv_data,
-                file_name="canva_import.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+        _csv_bytes = export_csv(
+            Carousel(theme=st.session_state.theme_done,
+                     slides=st.session_state.slides)
+        ).encode("utf-8")
+        st.download_button(
+            "📊 Canva用CSVをダウンロード",
+            _csv_bytes,
+            file_name="canva_import.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="dl_csv",
+        )
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 st.header("Instagram カルーセル生成ツール")
@@ -144,14 +146,13 @@ if generate_btn and theme:
 
         status.update(label=f"✅ {len(images)} 枚の生成完了！", state="complete")
 
-    csv_str = export_csv(carousel)
     save_csv(carousel, _CSV_PATH)
 
     st.session_state.images        = images
     st.session_state.slides        = carousel.slides
     st.session_state.illustrations = illustrations
     st.session_state.theme_done    = theme
-    st.session_state.csv_data      = csv_str.encode("utf-8")
+    st.rerun()
 
 # ── Slide grid ───────────────────────────────────────────────────────────────
 if st.session_state.images:
