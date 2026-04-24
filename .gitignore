@@ -1,0 +1,19 @@
+# environment
+.env
+.venv/
+
+# generated output
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# macOS
+.DS_Store
+
+# font archive (too large for GitHub)
+genjyuugothic-20150607.zip
