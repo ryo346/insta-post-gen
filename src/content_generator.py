@@ -9,59 +9,81 @@ _SYSTEM = """\
 教育・学習系アカウント向けに、高校生・受験生に刺さるコンテンツを生成します。
 必ずJSON形式のみで応答し、説明文・コードブロックは不要です。"""
 
-# ── 枚数指定あり ─────────────────────────────────────────────────────────────
-_USER_TMPL = """\
-テーマ「{theme}」で{num_slides}枚のInstagramカルーセルを作成してください。
-
-推奨構成:
-- 1枚目: 問題提起（読者の悩みを突く）
-- 2〜3枚目: 原因・現状（問題の深掘り）
-- 4〜{mid}枚目: 解決策・具体的方法
-- {last_m1}枚目: 成果・まとめ
-- {last}枚目: CTA（フォロー・保存を促す）
-{extra_instructions}
-以下のJSON形式で出力してください:
-{schema}"""
-
-# ── 枚数自動（AIが判断）────────────────────────────────────────────────────
-_USER_AUTO_TMPL = """\
-テーマ「{theme}」のInstagramカルーセルを作成してください。
-テーマの深さ・指示の量・伝えるべき内容量をもとに、10〜20枚の間で最適な枚数を自分で判断してください。
-
-推奨構成（枚数に合わせて比率を調整）:
-- 冒頭1〜2枚: 問題提起（読者の悩みを突く）
-- 中盤数枚: 原因・現状の深掘り → 解決策・具体的方法
-- 終盤1枚: 成果・まとめ
-- 最後1枚: CTA（フォロー・保存を促す）
-{extra_instructions}
-以下のJSON形式で出力してください:
-{schema}"""
-
-_JSON_SCHEMA = """\
+_JSON_SCHEMA = '''\
 {{
   "theme": "{theme}",
   "slides": [
     {{
       "slide_number": 1,
-      "title": "タイトル（20文字以内）",
-      "items": [
-        {{
-          "text": "チェックリスト本文（30文字以内）",
-          "highlight_text": "textに含まれる強調部分（なければnull）",
-          "highlight_sentiment": "negative または positive"
-        }}
+      "slide_type": "cover",
+      "cover_subtitle": "＼キャッチーな煽り文句／（20文字以内・任意）",
+      "cover_lines": [
+        {{"text": "1行目（10文字以内）", "color": "blue"}},
+        {{"text": "2行目（8文字以内）",  "color": "orange"}},
+        {{"text": "3行目（10文字以内）", "color": "black"}}
       ],
-      "illustration_hint": "イラスト説明（英語、15語以内）"
+      "illustration_hint": null,
+      "show_save_cta": false
+    }},
+    {{
+      "slide_number": 2,
+      "slide_type": "content",
+      "title": "タイトル（20文字以内。2行にする場合は\\nで区切る）",
+      "paragraphs": [
+        {{"text": "段落テキスト（30文字以内）", "highlight": "強調ワード", "highlight_color": "orange"}},
+        {{"text": "別の段落テキスト（30文字以内）", "highlight": null}}
+      ],
+      "illustration_hint": "illustration description in English within 8 words",
+      "show_save_cta": false
+    }},
+    {{
+      "slide_number": 99,
+      "slide_type": "summary",
+      "title": "まとめタイトル（\\nで2行可・各行20文字以内）",
+      "paragraphs": [
+        {{"text": "段落テキスト（30文字以内）", "highlight": "強調ワード", "highlight_color": "orange"}}
+      ],
+      "illustration_hint": null,
+      "show_save_cta": false
     }}
   ]
 }}
 
 制約:
-- スライド数は10〜20枚の範囲に収めること
-- 各スライドのitemsは3〜4個
-- highlight_textは必ずtextの部分文字列にすること
-- highlight_sentimentは問題・不安系 → "negative", 解決・成果系 → "positive"
-- titleは20文字以内"""
+- スライド数は10〜20枚の範囲
+- 最初の1枚は必ずcover、最後の1枚は必ずsummary
+- contentスライドのparagraphsは3〜4個
+- summaryスライドのparagraphsは3〜5個
+- highlightはtextの部分文字列であること（nullも可）
+- highlight_colorは"orange"（ポジティブ・解決系）または"blue"（問題・課題系）
+- illustration_hintはcontentのみ必須（summaryはnullでよい）
+- cover_linesは2〜3行'''
+
+_USER_TMPL = """\
+テーマ「{theme}」で{num_slides}枚のInstagramカルーセルを作成してください。
+
+推奨構成:
+- 1枚目: cover（キャッチーな表紙）
+- 2〜3枚目: content（導入・共感・問題提起）
+- 4〜{mid}枚目: content（解決策・具体的内容）
+- {last_m1}枚目: content（まとめの手前）
+- {last}枚目: summary（締め・CTA）
+{extra_instructions}
+以下のJSON形式で出力してください:
+{schema}"""
+
+_USER_AUTO_TMPL = """\
+テーマ「{theme}」のInstagramカルーセルを作成してください。
+テーマの深さ・指示の量・伝えるべき内容量をもとに、10〜20枚の間で最適な枚数を自分で判断してください。
+
+推奨構成（枚数に応じて比率調整）:
+- 1枚目: cover（キャッチーな表紙）
+- 冒頭数枚: content（導入・共感・問題提起）
+- 中盤複数枚: content（解決策・具体的内容）
+- 最後: summary（締め・CTA）
+{extra_instructions}
+以下のJSON形式で出力してください:
+{schema}"""
 
 _REVISE_TMPL = """\
 以下の既存スライドのJSONを、修正指示に従って修正してください。
@@ -73,11 +95,11 @@ _REVISE_TMPL = """\
 {current_json}
 
 ## 制約
-- slide_numberは絶対に変更しないこと
-- highlight_textは必ずtextの部分文字列にすること
-- highlight_sentimentは"negative"または"positive"のみ
-- titleは20文字以内、itemsのtextは30文字以内
-- itemsは3〜4個を維持すること
+- slide_number・slide_typeは変更しないこと
+- highlightはtextの部分文字列であること
+- highlight_colorは"orange"または"blue"のみ
+- cover_linesは各行10文字以内
+- titleは20文字以内、paragraphsのtextは30文字以内
 
 ## 出力形式（JSONのみ・説明文不要）
 {{"slides": [修正後のスライドの配列]}}
@@ -92,9 +114,7 @@ def _strip_codeblock(text: str) -> str:
 
 
 def _clamp_slides(carousel: Carousel) -> Carousel:
-    """10〜20枚の範囲を外れたスライドをクランプする（安全策）。"""
-    slides = carousel.slides[:20]
-    return Carousel(theme=carousel.theme, slides=slides)
+    return Carousel(theme=carousel.theme, slides=carousel.slides[:20])
 
 
 def generate_carousel(
@@ -102,10 +122,6 @@ def generate_carousel(
     num_slides: int | None = 10,
     instructions: str = "",
 ) -> Carousel:
-    """
-    num_slides=None のとき AI が枚数を自動決定（10〜20枚）。
-    整数を渡すとその枚数で固定生成。
-    """
     client = anthropic.Anthropic()
     extra = (
         f"\n追加指示（最優先で反映すること）:\n{instructions.strip()}\n"
@@ -116,9 +132,7 @@ def generate_carousel(
 
     if num_slides is None:
         content = _USER_AUTO_TMPL.format(
-            theme=theme,
-            extra_instructions=extra,
-            schema=schema,
+            theme=theme, extra_instructions=extra, schema=schema,
         )
     else:
         content = _USER_TMPL.format(
@@ -139,8 +153,7 @@ def generate_carousel(
     )
 
     raw = _strip_codeblock(response.content[0].text)
-    carousel = Carousel.model_validate(json.loads(raw))
-    return _clamp_slides(carousel)
+    return _clamp_slides(Carousel.model_validate(json.loads(raw)))
 
 
 def revise_carousel(
@@ -148,7 +161,6 @@ def revise_carousel(
     instructions: str,
     slide_numbers: list[int] | None = None,
 ) -> Carousel:
-    """指示に従って特定スライド（またはすべて）を修正し、更新後の Carousel を返す。"""
     from .models import Slide
 
     client = anthropic.Anthropic()

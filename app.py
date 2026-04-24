@@ -145,10 +145,15 @@ else:
 if st.session_state.slides:
     st.divider()
     with st.expander("🔧 スライドを修正する", expanded=False):
-        slide_labels = {
-            s.slide_number: f"スライド {s.slide_number}：{s.title}"
-            for s in st.session_state.slides
-        }
+        def _slide_label(s):
+            if s.slide_type == "cover":
+                first = s.cover_lines[0].text if s.cover_lines else "表紙"
+                return f"スライド {s.slide_number}【表紙】{first}…"
+            label = s.title.replace("\n", " ")
+            kind = "【まとめ】" if s.slide_type == "summary" else ""
+            return f"スライド {s.slide_number}{kind}：{label}"
+
+        slide_labels = {s.slide_number: _slide_label(s) for s in st.session_state.slides}
         selected_numbers = st.multiselect(
             "修正するスライドを選択（空欄 = すべて修正）",
             options=list(slide_labels.keys()),
