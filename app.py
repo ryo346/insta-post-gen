@@ -1,22 +1,16 @@
 from __future__ import annotations
-import io
-import zipfile
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
-from PIL import Image
 
 load_dotenv()
 
 from src.content_generator import generate_carousel, revise_carousel
 from src.models import Carousel
-from src.image_renderer import render_slide
-from src import illustration_generator as _ilgen
 from src.csv_exporter import export_csv, save_csv
 
-_IL_CACHE  = Path("output/.illustrations_cache")
-_CSV_PATH  = Path("output/canva_import.csv")
+_CSV_PATH = Path("output/canva_import.csv")
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -26,20 +20,14 @@ st.set_page_config(
 )
 
 # ── Session state ────────────────────────────────────────────────────────────
-if "images" not in st.session_state:
-    st.session_state.images = []
 if "slides" not in st.session_state:
     st.session_state.slides = []
-if "illustrations" not in st.session_state:
-    st.session_state.illustrations = {}
 if "theme_done" not in st.session_state:
     st.session_state.theme_done = ""
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("📸 カルーセル生成")
-    if not _ilgen.is_available():
-        st.warning("OPENAI_API_KEY が未設定のため、イラストはプレースホルダーになります。", icon="⚠️")
     st.divider()
 
     theme = st.text_input(
@@ -73,25 +61,10 @@ with st.sidebar:
     generate_btn = st.button("✨ 生成する", type="primary", use_container_width=True,
                              disabled=not theme)
 
-    if st.session_state.images:
+    if st.session_state.slides:
         st.divider()
-        st.caption(f"生成済み: {len(st.session_state.images)} 枚")
+        st.caption(f"生成済み: {len(st.session_state.slides)} 枚")
         st.caption(f"テーマ: {st.session_state.theme_done}")
-
-        zip_buf = io.BytesIO()
-        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for i, img in enumerate(st.session_state.images):
-                buf = io.BytesIO()
-                img.save(buf, "PNG")
-                zf.writestr(f"slide_{i+1:02d}.png", buf.getvalue())
-
-        st.download_button(
-            "📥 ZIP でまとめてDL",
-            zip_buf.getvalue(),
-            file_name=f"{st.session_state.theme_done}_carousel.zip",
-            mime="application/zip",
-            use_container_width=True,
-        )
 
         _csv_bytes = export_csv(
             Carousel(theme=st.session_state.theme_done,
@@ -108,78 +81,48 @@ with st.sidebar:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 st.header("Instagram カルーセル生成ツール")
-st.caption("テーマを入力して「生成する」を押すと、10〜20枚の投稿スライドを自動生成します。")
+st.caption("テーマを入力して「生成する」を押すと、10〜20枚分のコンテンツをCSVで出力します。")
 
 if generate_btn and theme:
-    st.session_state.images = []
     st.session_state.slides = []
 
     with st.status("生成中...", expanded=True) as status:
         st.write("📝 Claude API でコンテンツを生成中...")
         carousel = generate_carousel(theme, num_slides, instructions)
         st.write(f"✅ {len(carousel.slides)} 枚分のテキスト生成完了")
+        st.write("💾 CSVを保存中...")
+        save_csv(carousel, _CSV_PATH)
+        status.update(label=f"✅ {len(carousel.slides)} 枚分のCSV生成完了！", state="complete")
 
-        # ── Illustration generation ──────────────────────────────────────────
-        content_slides = [s for s in carousel.slides
-                          if s.slide_type == "content" and s.illustration_hint]
-        illustrations: dict[int, Image.Image] = {}
-        if _ilgen.is_available() and content_slides:
-            st.write(f"🖼️ イラスト生成中（{len(content_slides)} 枚）…")
-            il_prog = st.progress(0)
-            for idx, slide in enumerate(content_slides):
-                il = _ilgen.generate(slide.illustration_hint, _IL_CACHE)
-                if il:
-                    illustrations[slide.slide_number] = il
-                il_prog.progress((idx + 1) / len(content_slides))
-            il_prog.empty()
-            st.write(f"✅ イラスト {len(illustrations)} 枚生成完了")
-
-        # ── Slide rendering ──────────────────────────────────────────────────
-        st.write("🎨 スライド画像をレンダリング中...")
-        prog = st.progress(0)
-        images: list[Image.Image] = []
-        for i, slide in enumerate(carousel.slides):
-            il = illustrations.get(slide.slide_number)
-            images.append(render_slide(slide, illustration=il))
-            prog.progress((i + 1) / len(carousel.slides))
-        prog.empty()
-
-        status.update(label=f"✅ {len(images)} 枚の生成完了！", state="complete")
-
-    save_csv(carousel, _CSV_PATH)
-
-    st.session_state.images        = images
-    st.session_state.slides        = carousel.slides
-    st.session_state.illustrations = illustrations
-    st.session_state.theme_done    = theme
+    st.session_state.slides     = carousel.slides
+    st.session_state.theme_done = theme
     st.rerun()
 
-# ── Slide grid ───────────────────────────────────────────────────────────────
-if st.session_state.images:
+# ── Slide preview table ───────────────────────────────────────────────────────
+if st.session_state.slides:
     st.divider()
     st.subheader(f"生成結果 — {st.session_state.theme_done}")
 
-    cols_n = 3
-    for row_start in range(0, len(st.session_state.images), cols_n):
-        cols = st.columns(cols_n, gap="medium")
-        for col_idx in range(cols_n):
-            abs_idx = row_start + col_idx
-            if abs_idx >= len(st.session_state.images):
-                break
-            img   = st.session_state.images[abs_idx]
-            slide = st.session_state.slides[abs_idx]
-            with cols[col_idx]:
-                st.image(img, use_container_width=True)
-                buf = io.BytesIO()
-                img.save(buf, "PNG")
-                st.download_button(
-                    f"↓ slide_{abs_idx+1:02d}.png",
-                    buf.getvalue(),
-                    file_name=f"slide_{abs_idx+1:02d}.png",
-                    mime="image/png",
-                    use_container_width=True,
-                    key=f"dl_{abs_idx}",
-                )
+    for slide in st.session_state.slides:
+        if slide.slide_type == "cover":
+            lines = " / ".join(tl.text for tl in slide.cover_lines)
+            label = f"**【表紙】** {slide.cover_subtitle or ''} | {lines}"
+        elif slide.slide_type == "summary":
+            label = f"**【まとめ】** {slide.title.replace(chr(10), ' ')}"
+        else:
+            label = f"**{slide.title.replace(chr(10), ' ')}**"
+
+        with st.expander(f"スライド {slide.slide_number}　{label}", expanded=False):
+            if slide.slide_type == "cover":
+                if slide.cover_subtitle:
+                    st.write(f"キャッチコピー: {slide.cover_subtitle}")
+                for tl in slide.cover_lines:
+                    st.write(f"- {tl.text}（{tl.color}）")
+            else:
+                st.write(f"タイトル: {slide.title}")
+                for i, p in enumerate(slide.paragraphs, 1):
+                    hl = f"　*強調: {p.highlight}（{p.highlight_color}）*" if p.highlight else ""
+                    st.write(f"本文{i}: {p.text}{hl}")
 
 else:
     st.info("👈 左のサイドバーにテーマを入力して「生成する」を押してください。")
@@ -235,21 +178,8 @@ if st.session_state.slides:
                     slides=st.session_state.slides,
                 )
                 updated = revise_carousel(current, revision_text, target_numbers)
-                st.write("🎨 修正スライドを再レンダリング中...")
-
-                updated_map = {s.slide_number: s for s in updated.slides}
-                new_slides, new_images = [], []
-                for i, old_slide in enumerate(st.session_state.slides):
-                    new_slide = updated_map[old_slide.slide_number]
-                    new_slides.append(new_slide)
-                    if new_slide is not old_slide:
-                        il = st.session_state.illustrations.get(new_slide.slide_number)
-                        new_images.append(render_slide(new_slide, illustration=il))
-                    else:
-                        new_images.append(st.session_state.images[i])
-
+                save_csv(updated, _CSV_PATH)
                 rev_status.update(label="✅ 修正完了！", state="complete")
 
-            st.session_state.slides = new_slides
-            st.session_state.images = new_images
+            st.session_state.slides = updated.slides
             st.rerun()
