@@ -5,9 +5,27 @@ import anthropic
 from .models import Carousel
 
 _SYSTEM = """\
-あなたはInstagramのカルーセル投稿を作成するコンテンツディレクターです。
-教育・学習系アカウント向けに、高校生・受験生に刺さるコンテンツを生成します。
-必ずJSON形式のみで応答し、説明文・コードブロックは不要です。"""
+あなたはInstagramのカルーセル投稿を作るプロのコンテンツライターです。
+教育・学習系アカウント向けに、高校生・受験生に刺さる投稿を作ります。
+
+【文体・口調の規則】
+- 友人や先輩が語りかけるような、カジュアルで親しみやすい口調
+- 体験談・共感を交えた内容（「〜ばかりでした」「〜と思いませんか？」など）
+- 「！」「…」「？」を適度に使い、テンポよく読める文章
+- 難しい言葉は使わず、中高生でも理解できるシンプルな表現
+- 「〜ましょう」「〜べし！」「〜ですね」など自然な語尾
+
+【ヘッダーの規則】
+- 1〜2行・1行あたり最大15文字
+- 短くインパクトのある言葉（「模試の判定大嫌い！」「7:00 起床」のようなイメージ）
+- 感情・驚き・共感を引き出す言葉選び
+
+【本文の規則】
+- 1段落あたり2〜3行（1行15〜20文字程度）
+- 1スライドに3〜4段落
+- 説明文ではなく、語りかけるような文体
+
+必ずJSON形式のみで応答すること。説明文・コードブロック不要。"""
 
 _JSON_SCHEMA = '''\
 {{
@@ -16,35 +34,35 @@ _JSON_SCHEMA = '''\
     {{
       "slide_number": 1,
       "slide_type": "cover",
-      "cover_subtitle": "＼キャッチーな煽り文句／（20文字以内・任意）",
+      "cover_subtitle": "＼キャッチな煽り文句／（20文字以内・任意）",
       "cover_lines": [
-        {{"text": "1行目（10文字以内）", "color": "blue"}},
-        {{"text": "2行目（8文字以内）",  "color": "orange"}},
-        {{"text": "3行目（10文字以内）", "color": "black"}}
+        "1行目（10文字以内）",
+        "2行目（8文字以内）",
+        "3行目（10文字以内・任意）"
       ],
-      "illustration_hint": null,
-      "show_save_cta": false
+      "illustration_hint": null
     }},
     {{
       "slide_number": 2,
       "slide_type": "content",
-      "title": "タイトル（20文字以内。2行にする場合は\\nで区切る）",
+      "title": "ヘッダー（1〜2行・各15文字以内。2行の場合は\\nで区切る）",
       "paragraphs": [
-        {{"text": "段落テキスト（30文字以内）", "highlight": "強調ワード", "highlight_color": "orange"}},
-        {{"text": "別の段落テキスト（30文字以内）", "highlight": null}}
+        {{"text": "本文段落1（2〜3行分・語りかける口調）"}},
+        {{"text": "本文段落2"}},
+        {{"text": "本文段落3"}}
       ],
-      "illustration_hint": "illustration description in English within 8 words",
-      "show_save_cta": false
+      "illustration_hint": "subject described in 8 words or less in English"
     }},
     {{
       "slide_number": 99,
       "slide_type": "summary",
-      "title": "まとめタイトル（\\nで2行可・各行20文字以内）",
+      "title": "まとめヘッダー（\\nで2行可・各15文字以内）",
       "paragraphs": [
-        {{"text": "段落テキスト（30文字以内）", "highlight": "強調ワード", "highlight_color": "orange"}}
+        {{"text": "本文段落1"}},
+        {{"text": "本文段落2"}},
+        {{"text": "本文段落3"}}
       ],
-      "illustration_hint": null,
-      "show_save_cta": false
+      "illustration_hint": null
     }}
   ]
 }}
@@ -54,9 +72,7 @@ _JSON_SCHEMA = '''\
 - 最初の1枚は必ずcover、最後の1枚は必ずsummary
 - contentスライドのparagraphsは3〜4個
 - summaryスライドのparagraphsは3〜5個
-- highlightはtextの部分文字列であること（nullも可）
-- highlight_colorは"orange"（ポジティブ・解決系）または"blue"（問題・課題系）
-- illustration_hintはcontentのみ必須（summaryはnullでよい）
+- illustration_hintはcontentのみ必須（cover・summaryはnull）
 - cover_linesは2〜3行'''
 
 _USER_TMPL = """\
@@ -96,10 +112,9 @@ _REVISE_TMPL = """\
 
 ## 制約
 - slide_number・slide_typeは変更しないこと
-- highlightはtextの部分文字列であること
-- highlight_colorは"orange"または"blue"のみ
+- titleは1〜2行・各15文字以内（2行の場合は\\nで区切る）
+- 本文は語りかける口調を維持すること
 - cover_linesは各行10文字以内
-- titleは20文字以内、paragraphsのtextは30文字以内
 
 ## 出力形式（JSONのみ・説明文不要）
 {{"slides": [修正後のスライドの配列]}}

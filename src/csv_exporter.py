@@ -4,17 +4,13 @@ import io
 from pathlib import Path
 from .models import Carousel, Slide
 
-_MAX_BODY  = 5   # max paragraphs per content/summary slide
-_MAX_LINES = 3   # max cover title lines
+_MAX_BODY = 4   # max paragraphs per slide
 
 
 def _headers() -> list[str]:
-    cols = ["slide_number", "slide_type", "subtitle"]
-    for i in range(1, _MAX_LINES + 1):
-        cols += [f"title_line{i}", f"title_line{i}_color"]
-    cols.append("title")
+    cols = ["slide_number", "slide_type", "header", "illustration"]
     for i in range(1, _MAX_BODY + 1):
-        cols += [f"body{i}", f"highlight{i}", f"highlight{i}_color"]
+        cols.append(f"body{i}")
     return cols
 
 
@@ -24,16 +20,14 @@ def _row(slide: Slide) -> dict[str, str]:
     d["slide_type"]   = slide.slide_type
 
     if slide.slide_type == "cover":
-        d["subtitle"] = slide.cover_subtitle or ""
-        for i, tl in enumerate(slide.cover_lines[:_MAX_LINES], 1):
-            d[f"title_line{i}"]       = tl.text
-            d[f"title_line{i}_color"] = tl.color
+        subtitle = slide.cover_subtitle or ""
+        lines    = "\n".join(slide.cover_lines)
+        d["header"] = f"{subtitle}\n{lines}".strip() if subtitle else lines
     else:
-        d["title"] = slide.title.replace("\n", " ")
+        d["header"]       = slide.title.replace("\n", " ")
+        d["illustration"] = slide.illustration_hint or ""
         for i, para in enumerate(slide.paragraphs[:_MAX_BODY], 1):
-            d[f"body{i}"]              = para.text
-            d[f"highlight{i}"]         = para.highlight or ""
-            d[f"highlight{i}_color"]   = para.highlight_color if para.highlight else ""
+            d[f"body{i}"] = para.text
 
     return d
 
@@ -46,7 +40,7 @@ def export_csv(carousel: Carousel) -> str:
     writer.writeheader()
     for slide in carousel.slides:
         writer.writerow(_row(slide))
-    return "﻿" + buf.getvalue()   # BOM for Excel / Canva compatibility
+    return "﻿" + buf.getvalue()
 
 
 def save_csv(carousel: Carousel, path: Path) -> None:
