@@ -12,6 +12,9 @@ load_dotenv()
 from src.content_generator import generate_carousel, revise_carousel
 from src.models import Carousel
 from src.image_renderer import render_slide
+from src import illustration_generator as _ilgen
+
+_IL_CACHE = Path("output/.illustrations_cache")
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -25,12 +28,16 @@ if "images" not in st.session_state:
     st.session_state.images = []
 if "slides" not in st.session_state:
     st.session_state.slides = []
+if "illustrations" not in st.session_state:
+    st.session_state.illustrations = {}
 if "theme_done" not in st.session_state:
     st.session_state.theme_done = ""
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("📸 カルーセル生成")
+    if not _ilgen.is_available():
+        st.warning("OPENAI_API_KEY が未設定のため、イラストはプレースホルダーになります。", icon="⚠️")
     st.divider()
 
     theme = st.text_input(
@@ -97,19 +104,37 @@ if generate_btn and theme:
         carousel = generate_carousel(theme, num_slides, instructions)
         st.write(f"✅ {len(carousel.slides)} 枚分のテキスト生成完了")
 
+        # ── Illustration generation ──────────────────────────────────────────
+        content_slides = [s for s in carousel.slides
+                          if s.slide_type == "content" and s.illustration_hint]
+        illustrations: dict[int, Image.Image] = {}
+        if _ilgen.is_available() and content_slides:
+            st.write(f"🖼️ イラスト生成中（{len(content_slides)} 枚）…")
+            il_prog = st.progress(0)
+            for idx, slide in enumerate(content_slides):
+                il = _ilgen.generate(slide.illustration_hint, _IL_CACHE)
+                if il:
+                    illustrations[slide.slide_number] = il
+                il_prog.progress((idx + 1) / len(content_slides))
+            il_prog.empty()
+            st.write(f"✅ イラスト {len(illustrations)} 枚生成完了")
+
+        # ── Slide rendering ──────────────────────────────────────────────────
         st.write("🎨 スライド画像をレンダリング中...")
         prog = st.progress(0)
         images: list[Image.Image] = []
         for i, slide in enumerate(carousel.slides):
-            images.append(render_slide(slide))
+            il = illustrations.get(slide.slide_number)
+            images.append(render_slide(slide, illustration=il))
             prog.progress((i + 1) / len(carousel.slides))
         prog.empty()
 
         status.update(label=f"✅ {len(images)} 枚の生成完了！", state="complete")
 
-    st.session_state.images = images
-    st.session_state.slides = carousel.slides
-    st.session_state.theme_done = theme
+    st.session_state.images       = images
+    st.session_state.slides       = carousel.slides
+    st.session_state.illustrations = illustrations
+    st.session_state.theme_done   = theme
 
 # ── Slide grid ───────────────────────────────────────────────────────────────
 if st.session_state.images:
@@ -200,7 +225,8 @@ if st.session_state.slides:
                     new_slide = updated_map[old_slide.slide_number]
                     new_slides.append(new_slide)
                     if new_slide is not old_slide:
-                        new_images.append(render_slide(new_slide))
+                        il = st.session_state.illustrations.get(new_slide.slide_number)
+                        new_images.append(render_slide(new_slide, illustration=il))
                     else:
                         new_images.append(st.session_state.images[i])
 
