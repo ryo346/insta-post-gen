@@ -105,7 +105,7 @@ if st.session_state.slides:
 
     for slide in st.session_state.slides:
         if slide.slide_type == "cover":
-            lines = " / ".join(tl.text for tl in slide.cover_lines)
+            lines = " / ".join(slide.cover_lines)
             label = f"**【表紙】** {slide.cover_subtitle or ''} | {lines}"
         elif slide.slide_type == "summary":
             label = f"**【まとめ】** {slide.title.replace(chr(10), ' ')}"
@@ -116,8 +116,8 @@ if st.session_state.slides:
             if slide.slide_type == "cover":
                 if slide.cover_subtitle:
                     st.write(f"キャッチコピー: {slide.cover_subtitle}")
-                for tl in slide.cover_lines:
-                    st.write(f"- {tl.text}（{tl.color}）")
+                for line in slide.cover_lines:
+                    st.write(f"- {line}")
             else:
                 st.write(f"タイトル: {slide.title}")
                 for i, p in enumerate(slide.paragraphs, 1):
@@ -132,7 +132,7 @@ if st.session_state.slides:
     with st.expander("🔧 スライドを修正する", expanded=False):
         def _slide_label(s):
             if s.slide_type == "cover":
-                first = s.cover_lines[0].text if s.cover_lines else "表紙"
+                first = s.cover_lines[0] if s.cover_lines else "表紙"
                 return f"スライド {s.slide_number}【表紙】{first}…"
             label = s.title.replace("\n", " ")
             kind = "【まとめ】" if s.slide_type == "summary" else ""
