@@ -13,8 +13,10 @@ from src.content_generator import generate_carousel, revise_carousel
 from src.models import Carousel
 from src.image_renderer import render_slide
 from src import illustration_generator as _ilgen
+from src.csv_exporter import export_csv, save_csv
 
-_IL_CACHE = Path("output/.illustrations_cache")
+_IL_CACHE  = Path("output/.illustrations_cache")
+_CSV_PATH  = Path("output/canva_import.csv")
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -32,6 +34,8 @@ if "illustrations" not in st.session_state:
     st.session_state.illustrations = {}
 if "theme_done" not in st.session_state:
     st.session_state.theme_done = ""
+if "csv_data" not in st.session_state:
+    st.session_state.csv_data = None
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -91,6 +95,15 @@ with st.sidebar:
             use_container_width=True,
         )
 
+        if st.session_state.csv_data:
+            st.download_button(
+                "📊 Canva用CSVをダウンロード",
+                st.session_state.csv_data,
+                file_name="canva_import.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 st.header("Instagram カルーセル生成ツール")
 st.caption("テーマを入力して「生成する」を押すと、10〜20枚の投稿スライドを自動生成します。")
@@ -131,10 +144,14 @@ if generate_btn and theme:
 
         status.update(label=f"✅ {len(images)} 枚の生成完了！", state="complete")
 
-    st.session_state.images       = images
-    st.session_state.slides       = carousel.slides
+    csv_str = export_csv(carousel)
+    save_csv(carousel, _CSV_PATH)
+
+    st.session_state.images        = images
+    st.session_state.slides        = carousel.slides
     st.session_state.illustrations = illustrations
-    st.session_state.theme_done   = theme
+    st.session_state.theme_done    = theme
+    st.session_state.csv_data      = csv_str.encode("utf-8")
 
 # ── Slide grid ───────────────────────────────────────────────────────────────
 if st.session_state.images:
