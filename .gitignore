@@ -17,3 +17,5 @@ __pycache__/
 
 # font archive (too large for GitHub)
 genjyuugothic-20150607.zip
+# generated zip downloads
+output/
