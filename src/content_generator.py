@@ -9,6 +9,7 @@ _SYSTEM = """\
 教育・学習系アカウント向けに、高校生・受験生に刺さるコンテンツを生成します。
 必ずJSON形式のみで応答し、説明文・コードブロックは不要です。"""
 
+# ── 枚数指定あり ─────────────────────────────────────────────────────────────
 _USER_TMPL = """\
 テーマ「{theme}」で{num_slides}枚のInstagramカルーセルを作成してください。
 
@@ -20,6 +21,23 @@ _USER_TMPL = """\
 - {last}枚目: CTA（フォロー・保存を促す）
 {extra_instructions}
 以下のJSON形式で出力してください:
+{schema}"""
+
+# ── 枚数自動（AIが判断）────────────────────────────────────────────────────
+_USER_AUTO_TMPL = """\
+テーマ「{theme}」のInstagramカルーセルを作成してください。
+テーマの深さ・指示の量・伝えるべき内容量をもとに、10〜20枚の間で最適な枚数を自分で判断してください。
+
+推奨構成（枚数に合わせて比率を調整）:
+- 冒頭1〜2枚: 問題提起（読者の悩みを突く）
+- 中盤数枚: 原因・現状の深掘り → 解決策・具体的方法
+- 終盤1枚: 成果・まとめ
+- 最後1枚: CTA（フォロー・保存を促す）
+{extra_instructions}
+以下のJSON形式で出力してください:
+{schema}"""
+
+_JSON_SCHEMA = """\
 {{
   "theme": "{theme}",
   "slides": [
@@ -39,12 +57,11 @@ _USER_TMPL = """\
 }}
 
 制約:
+- スライド数は10〜20枚の範囲に収めること
 - 各スライドのitemsは3〜4個
 - highlight_textは必ずtextの部分文字列にすること
 - highlight_sentimentは問題・不安系 → "negative", 解決・成果系 → "positive"
-- titleは20文字以内
-"""
-
+- titleは20文字以内"""
 
 _REVISE_TMPL = """\
 以下の既存スライドのJSONを、修正指示に従って修正してください。
@@ -74,50 +91,56 @@ def _strip_codeblock(text: str) -> str:
     return text.strip()
 
 
+def _clamp_slides(carousel: Carousel) -> Carousel:
+    """10〜20枚の範囲を外れたスライドをクランプする（安全策）。"""
+    slides = carousel.slides[:20]
+    return Carousel(theme=carousel.theme, slides=slides)
+
+
 def generate_carousel(
     theme: str,
-    num_slides: int = 10,
+    num_slides: int | None = 10,
     instructions: str = "",
 ) -> Carousel:
+    """
+    num_slides=None のとき AI が枚数を自動決定（10〜20枚）。
+    整数を渡すとその枚数で固定生成。
+    """
     client = anthropic.Anthropic()
-    mid = num_slides - 3
-    last = num_slides
-    last_m1 = num_slides - 1
-
     extra = (
         f"\n追加指示（最優先で反映すること）:\n{instructions.strip()}\n"
         if instructions.strip()
         else ""
     )
+    schema = _JSON_SCHEMA.format(theme=theme)
+
+    if num_slides is None:
+        content = _USER_AUTO_TMPL.format(
+            theme=theme,
+            extra_instructions=extra,
+            schema=schema,
+        )
+    else:
+        content = _USER_TMPL.format(
+            theme=theme,
+            num_slides=num_slides,
+            mid=num_slides - 3,
+            last=num_slides,
+            last_m1=num_slides - 1,
+            extra_instructions=extra,
+            schema=schema,
+        )
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=8192,
-        system=[
-            {
-                "type": "text",
-                "text": _SYSTEM,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        messages=[
-            {
-                "role": "user",
-                "content": _USER_TMPL.format(
-                    theme=theme,
-                    num_slides=num_slides,
-                    mid=mid,
-                    last=last,
-                    last_m1=last_m1,
-                    extra_instructions=extra,
-                ),
-            }
-        ],
+        system=[{"type": "text", "text": _SYSTEM, "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": content}],
     )
 
     raw = _strip_codeblock(response.content[0].text)
-    data = json.loads(raw)
-    return Carousel.model_validate(data)
+    carousel = Carousel.model_validate(json.loads(raw))
+    return _clamp_slides(carousel)
 
 
 def revise_carousel(

@@ -50,7 +50,17 @@ with st.sidebar:
         height=180,
         help="スライドの内容・トーン・構成などを自由に指示できます。空欄でも動作します。",
     )
-    num_slides = st.slider("スライド枚数", min_value=10, max_value=20, value=10)
+    slide_mode = st.radio(
+        "スライド枚数",
+        options=["AIに任せる", "手動で指定"],
+        horizontal=True,
+    )
+    if slide_mode == "手動で指定":
+        num_slides = st.slider("枚数", min_value=10, max_value=20, value=10)
+    else:
+        num_slides = None
+        st.caption("AIがテーマ・指示の量に応じて10〜20枚で自動決定します。")
+
     generate_btn = st.button("✨ 生成する", type="primary", use_container_width=True,
                              disabled=not theme)
 
