@@ -25,7 +25,10 @@ _SYSTEM = """\
 - 1スライドに3〜4段落
 - 説明文ではなく、語りかけるような文体
 
-必ずJSON形式のみで応答すること。説明文・コードブロック不要。"""
+【JSON出力の厳守事項】
+- JSONの文字列値の中で実際の改行文字を使わないこと
+- 改行が必要な場合は必ず \\n（バックスラッシュn）を使うこと
+- 説明文・コードブロック不要。JSONのみ出力すること"""
 
 _JSON_SCHEMA = '''\
 {{
@@ -47,7 +50,7 @@ _JSON_SCHEMA = '''\
       "slide_type": "content",
       "title": "ヘッダー（1〜2行・各15文字以内。2行の場合は\\nで区切る）",
       "paragraphs": [
-        {{"text": "本文段落1（2〜3行分・語りかける口調）"}},
+        {{"text": "本文段落1（語りかける口調。改行は\\nで表現）"}},
         {{"text": "本文段落2"}},
         {{"text": "本文段落3"}}
       ],
@@ -73,7 +76,8 @@ _JSON_SCHEMA = '''\
 - contentスライドのparagraphsは3〜4個
 - summaryスライドのparagraphsは3〜5個
 - illustration_hintはcontentのみ必須（cover・summaryはnull）
-- cover_linesは2〜3行'''
+- cover_linesは2〜3行
+- JSONの文字列値の中に実際の改行文字を含めないこと（必ず\\nを使うこと）'''
 
 _USER_TMPL = """\
 テーマ「{theme}」で{num_slides}枚のInstagramカルーセルを作成してください。
@@ -115,17 +119,49 @@ _REVISE_TMPL = """\
 - titleは1〜2行・各15文字以内（2行の場合は\\nで区切る）
 - 本文は語りかける口調を維持すること
 - cover_linesは各行10文字以内
+- JSONの文字列値の中に実際の改行文字を含めないこと（必ず\\nを使うこと）
 
 ## 出力形式（JSONのみ・説明文不要）
 {{"slides": [修正後のスライドの配列]}}
 """
 
 
-def _strip_codeblock(text: str) -> str:
+def _fix_json_newlines(text: str) -> str:
+    """Escape literal newlines inside JSON string values."""
+    result = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if escaped:
+            result.append(ch)
+            escaped = False
+        elif ch == "\\":
+            result.append(ch)
+            escaped = True
+        elif ch == '"':
+            result.append(ch)
+            in_string = not in_string
+        elif ch == "\n" and in_string:
+            result.append("\\n")
+        elif ch == "\r" and in_string:
+            pass  # drop bare CR
+        else:
+            result.append(ch)
+    return "".join(result)
+
+
+def _extract_json(text: str) -> str:
+    """Strip markdown fences and extract the outermost JSON object."""
     text = text.strip()
     text = re.sub(r"^```[a-z]*\n?", "", text)
     text = re.sub(r"\n?```$", "", text)
-    return text.strip()
+    text = text.strip()
+    # Guarantee we start and end at the outermost braces
+    start = text.find("{")
+    end   = text.rfind("}")
+    if start != -1 and end != -1:
+        text = text[start : end + 1]
+    return _fix_json_newlines(text)
 
 
 def _clamp_slides(carousel: Carousel) -> Carousel:
@@ -167,7 +203,7 @@ def generate_carousel(
         messages=[{"role": "user", "content": content}],
     )
 
-    raw = _strip_codeblock(response.content[0].text)
+    raw = _extract_json(response.content[0].text)
     return _clamp_slides(Carousel.model_validate(json.loads(raw)))
 
 
@@ -204,7 +240,7 @@ def revise_carousel(
         }],
     )
 
-    raw = _strip_codeblock(response.content[0].text)
+    raw = _extract_json(response.content[0].text)
     updated_map = {s["slide_number"]: s for s in json.loads(raw)["slides"]}
 
     merged = [
