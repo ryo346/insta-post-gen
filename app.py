@@ -1,10 +1,16 @@
 from __future__ import annotations
 from pathlib import Path
 
+import os
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Streamlit Cloud stores secrets in st.secrets — copy to env vars if present
+for _key in ("ANTHROPIC_API_KEY",):
+    if _key not in os.environ and _key in st.secrets:
+        os.environ[_key] = st.secrets[_key]
 
 from src.content_generator import generate_carousel, revise_carousel
 from src.models import Carousel
